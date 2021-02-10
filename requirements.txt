@@ -1,0 +1,7 @@
+torch>=1.6.0
+transformers
+spacy
+numpy
+tqdm
+sklearn
+Levenshtein

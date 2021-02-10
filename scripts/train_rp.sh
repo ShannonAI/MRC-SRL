@@ -1,0 +1,13 @@
+python ./module/RolePrediction/train.py \
+--pretrained_model_name_or_path roberta-large \
+--train_path ./data/conll2005/train.english.conll05.json  \
+--dev_path ./data/conll2005/dev.english.conll05.json  \
+--dataset_tag conll2005 \
+--max_tokens 1024 \
+--max_epochs 20 \
+--lr 1e-5 \
+--max_grad_norm 1 \
+--warmup_ratio 0.05 \
+--eval \
+--save \
+--amp \
