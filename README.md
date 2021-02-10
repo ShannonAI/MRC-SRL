@@ -25,18 +25,22 @@ Table 2: Results for argument labeling.
 ### Dataset Preparation
 #### CoNLL2005
 The data is provided by: [CoNLL-2005 Shared Task](http://www.lsi.upc.edu/~srlconll/soft.html), but the original words are from the Penn Treebank dataset, which is not publicly available. If you have the PTB corpus, you can run:
-./scripts/make_conll05_data.sh /path/to/ptb/
+
+`./scripts/make_conll05_data.sh /path/to/ptb/`
 
 #### CoNLL2009
 The data is provided by: [CoNLL-2009 Shared Task](http://ufal.mff.cuni.cz/conll2009-st/index.html), Run: 
-./scripts/make_conll2009_data.sh /path/to/conll-2009
+
+`./scripts/make_conll2009_data.sh /path/to/conll-2009`
 
 #### CoNLL2012
 You have to follow the instructions below to get [CoNLL-2012](https://cemantix.org/data/ontonotes.html) data CoNLL-2012, this would result in a directory called /path/to/conll-formatted-ontonotes-5.0. Run:
-./scripts/make_conll2012_data.sh /path/to/conll-formatted-ontonotes-5.0
+
+`./scripts/make_conll2012_data.sh /path/to/conll-formatted-ontonotes-5.0`
 #### Frame Files
 You can follow the example below to get the frame files:
-./scripts/get_frames.sh
+
+'./scripts/get_frames.sh`
 
 ### Pretrained Models Preparation
 We use [Roberta-Large](https://huggingface.co/roberta-large)
