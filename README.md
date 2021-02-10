@@ -11,6 +11,7 @@ Table 1: Results for predicate disambiguation.
 
 
 Table 2: Results for argument labeling.
+
 |               | CoNLL05 WSJ | CoNLL05 Brown | CoNLL09 WSJ | CoNLL09 Brown | CoNLL12 Test |
 |---------------|-------------|---------------|-------------|---------------|--------------|
 | Previous SOTA | 88.8        | 82.0          | 92.4        | 85.7          | 86.6         |
