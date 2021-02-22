@@ -48,9 +48,9 @@ We use [Roberta-Large](https://huggingface.co/roberta-large)
 ### Training
 You can follow the example scripts below to get the model:
 - Train role prediction model: `./scripts/train_rp.sh`
-- GetrRole prediction result: `./scripts/get_rp.sh`
+- Get role prediction results: `./scripts/get_rp.sh`
 - Train predicate disambiguation model: `./scripts/train_pd.sh`
-- Get predicate disambiguation result: `./scripts/get_pd.sh`
+- Get predicate disambiguation results: `./scripts/get_pd.sh`
 ### Train Argument Labeling Model
 `./scripts/train_al.sh`
 ### Evaluation
@@ -59,7 +59,7 @@ You can follow the example scripts below to get the model:
 - Argument Labeling: `./scripts/eval_al.sh`
 
 ## Acknowledgement
-The data processing is partially from from [unisrl](https://github.com/bcmi220/unisrl)
+The data processing is partially from from [unisrl](https://github.com/bcmi220/unisrl).
 
 
 ## License
