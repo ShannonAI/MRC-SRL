@@ -40,20 +40,17 @@ You have to follow the instructions below to get [CoNLL-2012](https://cemantix.o
 #### Frame Files
 You can follow the example below to get the frame files:
 
-'./scripts/get_frames.sh`
+`./scripts/get_frames.sh`
 
 ### Pretrained Models Preparation
 We use [Roberta-Large](https://huggingface.co/roberta-large)
 
 ### Training
-#### Train Role Prediction Model
-`./scripts/train_rp.sh`
-#### Get Role Prediction Result
-`./scripts/get_rp.sh`
-#### Train Predicate Disambiguation Model
-`./scripts/train_pd.sh`
-#### Get Predicate Disambiguation Result
-`./scripts/get_pd.sh`
+You can follow the example scripts below to get the model:
+- Train role prediction model: `./scripts/train_rp.sh`
+- GetrRole prediction result: `./scripts/get_rp.sh`
+- Train predicate disambiguation model: `./scripts/train_pd.sh`
+- Get predicate disambiguation result: `./scripts/get_pd.sh`
 ### Train Argument Labeling Model
 `./scripts/train_al.sh`
 ### Evaluation

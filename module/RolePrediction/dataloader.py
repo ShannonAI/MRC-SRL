@@ -42,6 +42,7 @@ class MyDataset:
         self.init_data(data, tokenizer, max_tokens)
 
     def init_data(self, data, tokenizer, max_tokens):
+        #get initial features
         for d in tqdm(data, desc='stage1'):
             sentence = d['sentence']
             if 'roberta' in tokenizer.name_or_path:
@@ -86,9 +87,10 @@ class MyDataset:
         self.input_ids, self.target = zip(*sorted(t, key=lambda x: len(x[0])))
         length = [len(c) for c in self.input_ids]
         length = np.array(length)
-        #process input that exceeds Max tokens 
+        #process input that exceeds max tokens 
         length[length > max_tokens] = max_tokens
         indexes = batch_by_tokens(length, max_tokens)
+        #batch by tokens
         for s, e in tqdm(indexes, desc='stage2'):
             input_ids = self.input_ids[s:e+1]
             target = self.target[s:e+1]
@@ -137,8 +139,7 @@ def load_data(path, pretrained_model_name_or_path, max_tokens, shuffle, dataset_
         ARGS = ['ARG0', 'ARG1', 'ARG2', 'ARG3', 'ARG4', 'ARG5', 'ARGA']
         ARGMS = ['MNR', 'ADV', 'LOC', 'TMP', 'PRP', 'PRD', 'DIR', 'DIS', 'MOD',
                  'NEG', 'CAU', 'EXT', 'LVB', 'REC', 'ADJ', 'GOL', 'DSP', 'PRR', 'COM', 'PRX', 'PNC']
-    else:
-        raise Exception("Invalid Dataset Tag %s"%dataset_tag)
+
     global LABELS
     global LABELS2ID
     LABELS = ARGS+ARGMS
