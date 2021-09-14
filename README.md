@@ -1,23 +1,7 @@
 # An MRC Framework for Semantic Role Labeling
 This repo contains code for paper [An MRC Framework for Semantic Role Labeling](.).
 
-## Results
-Table 1: Results for predicate disambiguation.
 
-|               | Test WSJ | Test Brown |
-|---------------|----------|------------|
-| Previous SOTA | 96.9     | 90.6       |
-| Ours          | 97.3     | 91.3       |
-
-
-Table 2: Results for argument labeling.
-
-|               | CoNLL05 WSJ | CoNLL05 Brown | CoNLL09 WSJ | CoNLL09 Brown | CoNLL12 Test |
-|---------------|-------------|---------------|-------------|---------------|--------------|
-| Previous SOTA | 88.8        | 82.0          | 92.4        | 85.7          | 86.6         |
-| Ours          | 89.8        | 84.2          | 93.3        | 87.1          | 88.2         |
-
-## Usage
 ### Requirements
 - python>=3.6
 - pip install -r requirements.txt
