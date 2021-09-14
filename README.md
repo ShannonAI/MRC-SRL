@@ -1,7 +1,33 @@
 # An MRC Framework for Semantic Role Labeling
 This repo contains code for paper [An MRC Framework for Semantic Role Labeling](.).
 
+## Results
+Table 1: Results for predicate disambiguation.
+|                        | Dev  | WSJ  | Brown |
+|------------------------|------|------|-------|
+| Shi and Zhang (2017)   | -    | 93.4 | 82.4  |
+| Roth and Lapata (2016) | 94.8 | 95.5 | -     |
+| He et al. (2018b)      | 95.0 | 95.6 | -     |
+| Shi and Lin (2019)     | 96.3 | 96.9 | 90.6  |
+| Ours                   | 96.8 | 97.3 | 91.3  |
 
+Table 2: Results for argument labeling.
+|                                    | Encoder | CoNLL05 WSJ | CoNLL05 Brown | CoNLL09 WSJ | CoNLL09 Brown | CoNLL12 Test |
+|------------------------------------|---------|-------------|---------------|-------------|---------------|--------------|
+| Zhou, Li, and Zhao (2020)          | BERT    | 88.9        | 81.4          | 91.2        | 85.9          | -            |
+| Mohammadshahi and Henderson (2021) | BERT    | 88.9        | 83.2          | 91.2        | 86.4          | -            |
+| Xia et al. (2020)                  | RoBERTa | 88.6        | 83.2          | -           | -             | -            |
+| Marcheggiani and Titov (2020)      | RoBERTa | 88.0        | 80.6          | -           | -             | 86.8         |
+| Conia and Navigli (2020)           | BERT    | -           | -             | 92.6        | 85.9          | 87.3         |
+| Jindal et al. (2020)               | BERT    | 87.9        | 80.2          | 90.8        | 85.0          | 86.6         |
+| Paolini et al. (2021)              | T5      | 89.3        | 82.0          | -           | -             | 87.7         |
+| Blloshmi et al. (2021)             | BART    | -           | -             | 92.4        | 85.2          | 87.3         |
+| Shi and Lin (2019)                 | BERT    | 88.8        | 82.0          | 92.4        | 85.7          | 86.5         |
+| Ours                               | BERT    | 89.3        | 84.7          | 93.0        | 87.0          | 87.8         |
+| Ours                               | RoBERTa | 90.0        | 85.1          | 93.3        | 87.2          | 88.3         |
+
+
+## Usage
 ### Requirements
 - python>=3.6
 - pip install -r requirements.txt

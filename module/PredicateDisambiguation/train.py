@@ -42,7 +42,7 @@ def args_parser():
     parser.add_argument("--max_grad_norm", type=float, default=1)
 
     parser.add_argument("--resume", action="store_true",help="used to continue training from the checkpoint")
-    parser.add_argument("--checkpoint_path", type=str,help="checkpoint path when resum is true")
+    parser.add_argument("--checkpoint_path", type=str,help="checkpoint path when resume is true")
 
     parser.add_argument("--amp", action="store_true",help="whether to enable mixed precision")
     parser.add_argument("--local_rank", type=int, default=-1) ##DDP has been implemented but has not been tested.
