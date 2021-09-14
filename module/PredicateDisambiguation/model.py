@@ -8,10 +8,8 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
         self.config = config
         self.dropout = nn.Dropout(config.dropout)
-        self.bert = AutoModel.from_pretrained(
-            config.pretrained_model_name_or_path)
-        if ('albert' in config.pretrained_model_name_or_path) or ('robert' in config.pretrained_model_name_or_path):
-            self.bert.resize_token_embeddings(self.bert.config.vocab_size+2)
+        self.bert = AutoModel.from_pretrained(config.pretrained_model_name_or_path)
+        self.bert.resize_token_embeddings(self.bert.config.vocab_size+2)
         self.hidden_size = self.bert.config.hidden_size
         self.linear = nn.Linear(self.hidden_size, 1)
         self.loss_func = nn.BCEWithLogitsLoss()
@@ -27,8 +25,7 @@ class MyModel(nn.Module):
         if 'roberta' in self.bert.config._name_or_path:
             _, rep = self.bert(input_ids, attention_mask, return_dict=False)
         else:
-            _, rep = self.bert(input_ids, attention_mask,
-                               token_type_ids, return_dict=False)
+            _, rep = self.bert(input_ids, attention_mask,token_type_ids, return_dict=False)
         rep = self.dropout(rep)
         rep = self.linear(rep)  # (batch,1)
         if target is not None:

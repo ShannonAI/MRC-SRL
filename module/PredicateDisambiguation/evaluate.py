@@ -14,6 +14,7 @@ def get_score(gold_set, predict_set):
 
 
 def evaluation(model, dataloader, amp=False, device=torch.device('cpu')):
+    # Note this evaluation may be not completely correct, since we skip some samples without sense annonatations or with OOV lemmas
     if hasattr(model, 'module'):
         model = model.module
     model.eval()
@@ -54,6 +55,6 @@ def evaluation(model, dataloader, amp=False, device=torch.device('cpu')):
     argmax_idx = torch.argmax(predict_probs2, dim=-1)
     for i in range(len(predicts)):
         predicts[i][argmax_idx[i]] = 1
-    p = (targets2.max(dim=-1)[1] == predicts.max(dim=-1)
-         [1]).sum().item()/len(targets2)
-    print("score: %.4f" % p)
+    p = (targets2.max(dim=-1)[1] == predicts.max(dim=-1)[1]).sum().item()/len(targets2)
+    print("acccuracy score: %.4f" % p)
+    return {"accuracy":p}

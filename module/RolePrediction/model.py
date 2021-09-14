@@ -9,10 +9,9 @@ class MyModel(nn.Module):
         self.config = config
         self.bert = AutoModel.from_pretrained(
             config.pretrained_model_name_or_path)
-        if ('albert' in config.pretrained_model_name_or_path) or ('roberta' in config.pretrained_model_name_or_path):
-            self.bert.resize_token_embeddings(self.bert.config.vocab_size+2)
+        self.bert.resize_token_embeddings(self.bert.config.vocab_size+2)
         self.hidden_size = self.bert.config.hidden_size
-        num_labels = 28 if config.dataset == 'conll2012' else 20
+        num_labels = 28 if config.dataset_tag == 'conll2012' else 20
         self.linear = nn.Linear(self.hidden_size, num_labels)
         self.dropout = nn.Dropout(p=config.dropout)
         self.loss_func = nn.BCEWithLogitsLoss()

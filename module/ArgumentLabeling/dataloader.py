@@ -69,7 +69,6 @@ TAGS2ID = dict([(j, i) for i, j in enumerate(TAGS)])
 LABELS = None
 LABELS1 = None
 ALL_LABELS = None
-LABELS2ID = None
 
 frames = None
 
@@ -88,37 +87,45 @@ def label2query(label1, label2, _id=None, query_type=None):
         if query_type == 0:
             query = f'what are the arg{desc} of predicate X?'
         elif query_type == 1:
-            if (_id in frames) and (label2 in frames[_id]['args']):
-                meaning = frames[_id]['args'][label2]
-                query = f"what are the arg{desc} of predicate X with meaning {meaning} ?"
-            else:
-                query = f"what are the arg{desc} of predicate X ?"
-        elif query_type == 2:
+            # only use meaning
             if (_id in frames) and (label2 in frames[_id]['args']):
                 meaning = frames[_id]['args'][label2]
                 query = f"what are the arguments of predicate X with meaning {meaning} ?"
+            else:
+                query = f"what are the arg{desc} of predicate X?"          
+        elif query_type == 2:
+            if (_id in frames) and (label2 in frames[_id]['args']):
+                meaning = frames[_id]['args'][label2]
+                query = f"what are the arg{desc} of predicate X with meaning {meaning} ?"
             else:
                 query = f"what are the arg{desc} of predicate X?"
         else:
             raise Exception("Invalid query type number")
     else:
         if query_type == 0:
+            query = f"what are the {label2} modifiers of predicate X?"
+        elif query_type == 1:
             desc = ARGMS_DESC[label2]
             query = f"what are the {desc} modifiers of predicate X?"
-        elif query_type == 1:
-            query = f"what are the {label2} modifiers of predicate X?"
         else:
             raise Exception("Invalid query type number")
     return query
 
 
 class MyDataset:
-    def __init__(self, path="", tokenizer=None, max_tokens=1024, gold_level=0, arg_query_type=0, argm_query_type=0, dataset_tag=''):
+    def __init__(self, path="", tokenizer=None, max_tokens=1024, gold_level=0, arg_query_type=0, argm_query_type=0):
         '''
         gold_level=0: gold predicate disambiguation
-        gold_level=1: gold lemma
-        gold_level=2: predict lemma 
+        gold_level=1: predict predicate disambiguation
+
+        arg_query_type=0: query with label only
+        arg_query_type=1: query without label but with semantics
+        arg_query_type=2: query with label and semantics
+ 
+        argm_query_type=0: query with label only
+        argm_query_type=1: query with semantics
         '''
+        #get initial features
         if not path:
             return
         data = json.load(open(path))
@@ -130,13 +137,12 @@ class MyDataset:
         self.gold = []
         #the evaluation for CONL 2009 includes the results of predicate disambiguation
         self.gold_senses = []
-        self.senses = [] #predict sense under gold lemma
-        self.senses1 = [] #predict sense under predict lemma
+        self.senses = [] #predict sense under predict lemma
         self.init_data(self.data, tokenizer, max_tokens,
                        gold_level, arg_query_type, argm_query_type)
 
     def init_data(self, data, tokenizer, max_tokens, gold_level, arg_query_type, argm_query_type):
-        for s_id, d in enumerate(tqdm(data, desc='stage 1')):
+        for s_id, d in enumerate(tqdm(data, desc='preprocessing')):
             sentence = d['sentence']
             if 'roberta' in tokenizer.name_or_path:
                 for i in range(1, len(sentence)):
@@ -149,19 +155,15 @@ class MyDataset:
             for i in range(len(predicates)):
                 pre = predicates[i]
                 pre_str = sentence[pre]
-                sentence1i = sentence1[:pre]+[['[unused1]']] + \
-                    sentence1[pre:pre+1]+[['[unused2]']]+sentence1[pre+1:]
+                sentence1i = sentence1[:pre]+[['<p>']] + sentence1[pre:pre+1]+[['</p>']]+sentence1[pre+1:]
                 args = arguments[i]
                 labels = d['plabel'][i]
                 self.gold_senses.append((s_id,pre,lemmas[i],frameset_ids[i]))
                 self.senses.append((s_id,pre,d['plemma_ids'][i].split('.')[0],d['plemma_ids'][i].split('.')[1]))
-                self.senses1.append((s_id,pre,d['plemma_ids1'][i].split('.')[0],d['plemma_ids1'][i].split('.')[1]))
                 if gold_level == 0:
                     lem_id = lemmas[i]+'.'+frameset_ids[i]
                 elif gold_level == 1:
                     lem_id = d['plemma_ids'][i]
-                elif gold_level == 2:
-                    lem_id = d['plemma_ids1'][i]
                 else:
                     raise Exception(f"Invalid gold level")
                 lengthi = [len(s) for s in sentence1i]
@@ -205,7 +207,7 @@ class MyDataset:
                                     query_type).replace('X', pre_str)
                     q = tokenizer.tokenize(q)
                     if 'roberta' in tokenizer.name_or_path:
-                        txt = ['<s>']+q+['/s']+['<s>']+sentence2i+['/s']
+                        txt = ['<s>']+q+['</s>']+['</s>']+sentence2i+['</s>']
                     else:
                         txt = ['[CLS]']+q+['[SEP]']+sentence2i+['[SEP]']
                     txt_ids = tokenizer.convert_tokens_to_ids(txt)
@@ -242,14 +244,17 @@ class MyDataset:
         self.batch_target = []
         self.batch_attention_mask = []
         t = zip(self.input_ids, self.token_type_ids, self.target, self.ids)
+        #sort by length
         self.input_ids, self.token_type_ids, self.target, self.ids = zip(
             *sorted(t, key=lambda x: len(x[0])))
         length = [len(i) for i in self.input_ids]
         assert all([i <= 512 for i in length])
+        #process input that exceeds max tokens 
         length = np.array(length)
         length[length > max_tokens] = max_tokens
         indexes = batch_by_tokens(length, max_tokens)
-        for s, e in tqdm(indexes, desc='stage2'):
+        #batch by tokens
+        for s, e in tqdm(indexes, desc='batching'):
             input_ids = self.input_ids[s:e+1]
             token_type_ids = self.token_type_ids[s:e+1]
             target = self.target[s:e+1]
@@ -267,6 +272,7 @@ class MyDataset:
             self.batch_attention_mask.append(attention_mask)
 
     def save(self, save_dir):
+        #save processed data
         if os.path.exists(save_dir):
             shutil.rmtree(save_dir)
         os.makedirs(save_dir)
@@ -277,7 +283,6 @@ class MyDataset:
         gold = np.array(self.gold)
         np.save(os.path.join(save_dir,'gold_senses.npy'),self.gold_senses)
         np.save(os.path.join(save_dir,'senses.npy'),self.senses)
-        np.save(os.path.join(save_dir,'senses1.npy'),self.senses1)        
         np.save(os.path.join(save_dir, 'gold.npy'), gold)
         np.save(os.path.join(save_dir, 'input_ids.npy'), input_ids)
         np.save(os.path.join(save_dir, 'token_type_ids.npy'), token_type_ids)
@@ -285,16 +290,15 @@ class MyDataset:
         np.save(os.path.join(save_dir, 'ids.npy'), ids)
 
     def load(self, save_dir, max_tokens):
+        #load cached data
         input_ids = np.load(os.path.join(save_dir, 'input_ids.npy'), allow_pickle=True)
         token_type_ids = np.load(os.path.join(save_dir, 'token_type_ids.npy'), allow_pickle=True)
         target = np.load(os.path.join(save_dir, 'target.npy'), allow_pickle=True)
         ids = np.load(os.path.join(save_dir, 'ids.npy'), allow_pickle=True)
         gold_senses = np.load(os.path.join(save_dir,'gold_senses.npy'),allow_pickle=True)
         senses = np.load(os.path.join(save_dir,'senses.npy'),allow_pickle=True)
-        senses1 = np.load(os.path.join(save_dir,'senses1.npy'),allow_pickle=True)
         self.gold_senses = [(int(i[0]),int(i[1]),i[2],i[3]) for i in gold_senses]
         self.senses = [(int(i[0]),int(i[1]),i[2],i[3]) for i in senses]
-        self.senses1 = [(int(i[0]),int(i[1]),i[2],i[3]) for i in senses1]        
         self.gold = np.load(os.path.join(save_dir, 'gold.npy'), allow_pickle=True).tolist()
         self.gold = [(int(g[0]), int(g[1]), int(g[2]), int(g[3]), g[4]) for g in self.gold]
         self.input_ids = [torch.from_numpy(d) for d in input_ids]
@@ -326,11 +330,10 @@ def load_data(path, pretrained_model_name_or_path, max_tokens, shuffle, dataset_
     frames = json.load(open(frames_path))
     ALL_LABELS = ['O']+[t1+'-'+t0 for t0 in ARGS+ARGMS for t1 in TAGS[1:]]
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
-    if 'albert' or 'roberta' in tokenizer.name_or_path:
-        tokenizer.add_special_tokens(
-            {'additional_special_tokens': ['[unused1]', '[unused2]']})
+    tokenizer.add_special_tokens(
+            {'additional_special_tokens': ['<p>', '</p>']})
     dataset = MyDataset(path, tokenizer, max_tokens,
-                        gold_level, arg_query_type, argm_query_type, dataset_tag)
+                        gold_level, arg_query_type, argm_query_type)
     sampler = DistributedSampler(
         dataset, rank=local_rank) if local_rank != -1 else None
     dataloader = DataLoader(dataset, batch_size=1, sampler=sampler,

@@ -34,7 +34,7 @@ def evaluation(model, dataloader, amp=False, device=torch.device('cuda'),dataset
     sep_predicts = []
     if dataset_tag=='conll2009':
         gold_senses = [(i[0],i[1],i[-1]) for i in dataloader.dataset.gold_senses]
-        predict_senses = [(i[0],i[1],i[-1]) for i in dataloader.dataset.senses1]   
+        predict_senses = [(i[0],i[1],i[-1]) for i in dataloader.dataset.senses]   
     else:
          gold_senses = []
          predict_senses = []
@@ -96,10 +96,10 @@ def evaluation(model, dataloader, amp=False, device=torch.device('cuda'),dataset
             predict_probs2[i][j] = pad_prob.unsqueeze(0).expand(lens[0], 7) #(seq_len,7)
         # probabilities of tag O
         Os = [p2ij[:, 0] for p2ij in predict_probs2[i]]
-        O_prob = torch.ones(Os[0].shape)  # Os[0]的大小应该为(seq_len,)
+        O_prob = torch.ones(Os[0].shape)  # (seq_len,)
         for op in Os:
             O_prob = O_prob*op
-        # merge score
+        # merge scores
         Ps = [p2ij[:, 1:] for p2ij in predict_probs2[i]]
         Ps = torch.cat(Ps, 1)
         Ps = torch.cat([O_prob.unsqueeze(1), Ps], 1)
@@ -115,7 +115,7 @@ def evaluation(model, dataloader, amp=False, device=torch.device('cuda'),dataset
             predicts.append(item)
     p, r, f = get_score(set.union(set(gold),set(gold_senses)),set.union(set(predicts),set(predict_senses)))
     print("glb score: ", 'p:%.4f'%p, 'r:%.4f'%r, 'f:%.4f'%f)
-
+    return {"p":p,"r":r,"f":f}
 
 def get_index(p, k, i=0, d=float('inf')):
     if k in p[i:]:
@@ -142,10 +142,10 @@ def decode(predict, dataset_tag):
         p = [ALL_LABELS[i] for i in p]
         p1 = [i.split('-')[0] if '-' in i else i for i in p]
         p2 = [i[2:] if '-' in i else i for i in p]
-        if 'B' not in p1 and 'I' not in p1:
+        if 'B' not in p1:
             res.append(s)
             continue
-        i = min(get_index(p1, 'B'), get_index(p1, 'I')) 
+        i = get_index(p1, 'B') 
         x = p2[i]
         while i < len(p)-1:
             for j in range(i+1, len(p)):
@@ -153,10 +153,10 @@ def decode(predict, dataset_tag):
                     s.append((i, j-1, x))
                     break
             if p[j] == 'O':
-                if j == len(p)-1 or ('B' not in p1[j+1:] and 'I' not in p1[j+1:]):
+                if j == len(p)-1 or ('B' not in p1[j+1:]):
                     break
                 else:
-                    i = min(get_index(p1, 'B', j+1), get_index(p1, 'I', j+1))
+                    i = get_index(p1, 'B', j+1)
                     x = p2[i]
             else:
                 i = j
@@ -174,10 +174,10 @@ def sep_decode(predict, context_mask):
         p = [TAGS[i] for i in p]
         p1 = [i.split('-')[0] if '-' in i else i for i in p]
         p2 = [i[2:] if '-' in i else i for i in p]
-        if 'B' not in p1 and 'I' not in p1:
+        if 'B' not in p1:
             res.append(s)
             continue
-        i = min(get_index(p1, 'B'), get_index(p1, 'I')) 
+        i = get_index(p1, 'B') 
         x = p2[i]
         while i < len(p)-1:
             for j in range(i+1, len(p)):
@@ -185,10 +185,10 @@ def sep_decode(predict, context_mask):
                     s.append((i, j-1, x))
                     break
             if p[j] == 'O':
-                if j == len(p)-1 or ('B' not in p1[j+1:] and 'I' not in p1[j+1:]):
+                if j == len(p)-1 or ('B' not in p1[j+1:]):
                     break
                 else:
-                    i = min(get_index(p1, 'B', j+1), get_index(p1, 'I', j+1))
+                    i = get_index(p1, 'B', j+1)
                     x = p2[i]
             else:
                 i = j

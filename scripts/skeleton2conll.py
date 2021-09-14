@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+# Note this script should be run in python2 environment
 """
 Get most current usage with:
 

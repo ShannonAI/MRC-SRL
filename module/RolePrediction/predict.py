@@ -40,7 +40,7 @@ class LabelDataset:
         self.init_data(data, tokenizer, max_tokens)
 
     def init_data(self, data, tokenizer, max_tokens):
-        for s_id, d in enumerate(tqdm(data, desc='stage1')):
+        for s_id, d in enumerate(tqdm(data, desc='preprocessing')):
             sentence = d['sentence']
             if 'roberta' in tokenizer.name_or_path:
                 for i in range(1, len(sentence)):
@@ -51,15 +51,14 @@ class LabelDataset:
             for i in range(len(predicates)):
                 pre = predicates[i]
                 args = arguments[i]
-                sentence1i = sentence1[:pre]+[['[unused1]']] + \
-                    sentence1[pre:pre+1]+[['[unused2]']]+sentence1[pre+1:]
+                sentence1i = sentence1[:pre]+[['<p>']] + \
+                    sentence1[pre:pre+1]+[['</p>']]+sentence1[pre+1:]
                 if 'roberta' in tokenizer.name_or_path:
                     sentence2i = ['<s>']+sum(sentence1i, [])+['</s>']
                 else:
                     sentence2i = ['[CLS]']+sum(sentence1i, [])+['[SEP]']
                 input_ids = tokenizer.convert_tokens_to_ids(sentence2i)
-                self.input_ids.append(torch.tensor(
-                    input_ids, dtype=torch.long))
+                self.input_ids.append(torch.tensor(input_ids, dtype=torch.long))
                 args1 = set()
                 for arg in args:
                     s, e, l = arg
@@ -85,7 +84,7 @@ class LabelDataset:
         length = np.array(length)
         length[length > max_tokens] = max_tokens
         indexes = batch_by_tokens(length, max_tokens)
-        for s, e in tqdm(indexes, desc='stage2'):
+        for s, e in tqdm(indexes, desc='batching'):
             input_ids = self.input_ids[s:e+1]
             target = self.target[s:e+1]
             input_ids1 = pad_sequence(input_ids, batch_first=True)
@@ -118,11 +117,10 @@ def label_predict(dataset, model, device, amp, alpha=-1):
     predict_probs = []
     gold = []
     with torch.no_grad():
-        for i in trange(len(dataset), desc='argm predict'):
+        for i in trange(len(dataset), desc='predict'):
             batch = dataset[i]
             input_ids, attention_mask, target = batch['input_ids'], batch['attention_mask'], batch['target']
-            input_ids, attention_mask = input_ids.to(
-                device), attention_mask.to(device)
+            input_ids, attention_mask = input_ids.to(device), attention_mask.to(device)
             if amp:
                 with autocast():
                     predict_prob = model(input_ids, attention_mask)
@@ -132,14 +130,18 @@ def label_predict(dataset, model, device, amp, alpha=-1):
             predict_probs.append(predict_prob)
     gold1 = torch.cat(gold, dim=0)
     predict_probs1 = torch.cat(predict_probs, dim=0)
-    predicts = torch.zeros(predict_probs1.shape, dtype=torch.uint8)
     if alpha==-1:
-      predict = (predict_probs1>0.5).int().view(-1)
-      score = sum([i==j for i,j in zip(predict,gold1.view(-1))])/len(predict)
-      print('score: %.4f'%score) 
-      return None   
+        # evaluation using accuracy, the score is used to select the best checkpoint
+        score = classification_report(gold1,(predict_probs1>0.5).int(),output_dict=True,zero_division=0,target_names=LABELS)['micro avg']
+        p,r,f = score['precision'],score['recall'],score['f1-score']
+        print('micro avg score: p:{:.4f} r:{:.4f} f:{:.4f}'.format(p,r,f))
+        return None   
+    # detailed evaluation , used to determine the value of alpha
+    predicts = torch.zeros(predict_probs1.shape, dtype=torch.uint8)
     predicts.view(-1)[torch.topk(predict_probs1.float().view(-1),int(len(predicts)*alpha))[1]] = 1
-    print(classification_report(gold1, predicts, target_names=LABELS, digits=4))
+    score = classification_report(gold1,predicts,output_dict=True,zero_division=0,target_names=LABELS)['micro avg']
+    p,r,f = score['precision'],score['recall'],score['f1-score']
+    print('micro avg score: p:{:.4f} r:{:.4f} f:{:.4f}'.format(p,r,f))    
     predicts1 = []
     for p in predicts:
         t = []
@@ -151,8 +153,7 @@ def label_predict(dataset, model, device, amp, alpha=-1):
 
 
 def load_checkpoint(model_path):
-    config = pickle.load(
-        open(os.path.join(os.path.split(model_path)[0], 'args'), 'rb'))
+    config = pickle.load(open(os.path.join(os.path.split(model_path)[0], 'args'), 'rb'))
     checkpoint = torch.load(model_path)
     model = MyModel(config)
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -167,7 +168,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_path')
     parser.add_argument('--checkpoint_path')
     parser.add_argument('--save', action='store_true')
-    parser.add_argument('--alpha', type=float, default=-1)
+    parser.add_argument('--alpha', type=float, default=-1,help="ratio of the number of roles to the number of predicates")
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--max_tokens', type=int, default=1024)
     args = parser.parse_args()
@@ -184,12 +185,11 @@ if __name__ == "__main__":
         raise Exception("Invalid Dataset Tag:%s" % args.dataset_tag)
     LABELS = ARGS+ARGMS
     LABELS2ID = {k: v for v, k in enumerate(LABELS)}
-    device = torch.device(
-        "cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     config, model = load_checkpoint(args.checkpoint_path)
     model.to(device)
-    tokenizer = AutoTokenizer.from_pretrained(
-        config.pretrained_model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(config.pretrained_model_name_or_path)
+    tokenizer.add_special_tokens({'additional_special_tokens': ['<p>', '</p>']})    
     dataset = LabelDataset(args.dataset_path, tokenizer, args.max_tokens)
     predicts = label_predict(dataset, model, device, args.amp, args.alpha)
     if args.save:

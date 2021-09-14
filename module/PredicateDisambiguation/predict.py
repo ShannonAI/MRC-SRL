@@ -28,21 +28,19 @@ def dis_lemma(lemma):
         return lemma
 
 
-def lemmatize(sent, predicates, dis=False):
+def lemmatize(sent, predicates):
     '''
-    lemmatization using spaCy
+    lemmatization using spaCy, you can replace it with other lemmatizers.
     Args:
         sent: word list
         predicates: predicate index list
-        dis: whether to use edit distance for alignment
     '''
     sent = [s.lower() for s in sent]
     sent1 = spacy.tokens.doc.Doc(nlp.vocab, sent)
     for name, proc in nlp.pipeline:
         sent1 = proc(sent1)
     plemmas = [sent1[p].lemma_ for p in predicates]
-    if dis:
-        plemmas = [dis_lemma(l) for l in plemmas]
+    plemmas = [dis_lemma(l) for l in plemmas]
     return plemmas
 
 
@@ -57,12 +55,7 @@ def load_checkpoint(model_path):
 
 
 class DisamDataset:
-    def __init__(self, path="", tokenizer=None, max_tokens=1024, lemma_level=0):
-        '''
-        lemma_level=0: gold lemma
-        lemma_level=1: predict lemma without edit distance (used for datasets with many OOV recognized lemmas)
-        lemma_level=2: predict lemma with edit distance
-        '''
+    def __init__(self, path="", tokenizer=None, max_tokens=1024):
         if not path:
             return
         data = json.load(open(path))
@@ -71,21 +64,14 @@ class DisamDataset:
         self.token_type_ids = []
         self.target = []
         self.ids = []  # (sentence id,prediate id,lemma,frameset_id)
-        self.lemma_level = lemma_level
-        self.init_data(data, tokenizer, max_tokens, lemma_level)
+        self.init_data(data, tokenizer, max_tokens)
 
-    def init_data(self, data, tokenizer, max_tokens, lemma_level):
-        for s_id, d in enumerate(tqdm(data, desc='stage 1')):
+    def init_data(self, data, tokenizer, max_tokens):
+        for s_id, d in enumerate(tqdm(data, desc='preprocessing')):
             sentence = d['sentence']
             predicates = d['predicates']
-            if lemma_level == 0:
-                lemmas = d['lemmas']
-            elif lemma_level == 1:
-                lemmas = lemmatize(sentence, predicates, dis=False)
-            elif lemma_level == 2:
-                lemmas = lemmatize(sentence, predicates, dis=True)
-            else:
-                raise Exception()
+            glemmas = d['lemmas']
+            plemmas = lemmatize(sentence, predicates)
             if 'roberta' in tokenizer.name_or_path:
                 for i in range(1, len(sentence)):
                     sentence[i] = ' '+sentence[i]
@@ -93,19 +79,17 @@ class DisamDataset:
             frameset_ids = d['frameset_ids']
             for i in range(len(predicates)):
                 pre = predicates[i]
-                lemma = lemmas[i]
+                glemma = glemmas[i]
+                plemma = plemmas[i]
                 gold_fid = frameset_ids[i]
-                sentence1i = sentence1[:pre]+[['[unused1]']] + \
-                    sentence1[pre:pre+1]+[['[unused2]']]+sentence1[pre+1:]
+                sentence1i = sentence1[:pre]+[['<p>']] + \
+                    sentence1[pre:pre+1]+[['</p>']]+sentence1[pre+1:]
                 sentence2i = sum(sentence1i, [])
-                if lemma not in lemma_dict:
-                    #print('OOV lemma:', lemma)
-                    continue
-                for fid in lemma_dict[lemma]:
-                    q = lemma_dict[lemma][fid]
+                for fid in lemma_dict[plemma]:
+                    q = lemma_dict[plemma][fid]
                     q = tokenizer.tokenize(q)
                     if 'roberta' in tokenizer.name_or_path:
-                        txt = ['<s>']+q+['/s']+['<s>']+sentence2i+['/s']
+                        txt = ['<s>']+q+['</s>']+['</s>']+sentence2i+['</s>']
                     else:
                         txt = ['[CLS]']+q+['[SEP]']+sentence2i+['[SEP]']
                     txt_ids = tokenizer.convert_tokens_to_ids(txt)
@@ -120,7 +104,7 @@ class DisamDataset:
                     self.token_type_ids.append(token_type_ids)
                     target = [1 if fid == gold_fid else 0]
                     self.target.append(target)
-                    self.ids.append((s_id, i, lemma, fid))
+                    self.ids.append((s_id, i, glemma, plemma, fid)) #meta information about this sample
         self.do_batch(max_tokens)
 
     def do_batch(self, max_tokens):
@@ -132,7 +116,7 @@ class DisamDataset:
         length = np.array(length)
         length[length > max_tokens] = max_tokens
         indexes = batch_by_tokens(length, max_tokens)
-        for s, e in tqdm(indexes, desc='stage2'):
+        for s, e in tqdm(indexes, desc='batching'):
             input_ids = self.input_ids[s:e+1]
             token_type_ids = self.token_type_ids[s:e+1]
             target = self.target[s:e+1]
@@ -152,24 +136,17 @@ class DisamDataset:
         return len(self.batch_input_ids)
 
     def predict2json(self, predicts, ids):
-        # 注意，这里我们的ids
-        data = self.data
-        if self.lemma_level == 0:
-            plemma_ids = 'plemma_ids'  # gold lemma
-        else:
-            plemma_ids = 'plemma_ids1'  # predict lemma
-        for d in data:
+        for d in self.data:
             # 01 is the default sense number
-            d[plemma_ids] = ['X.01' for _ in d['predicates']]
+            d['plemma_ids'] = ['X.01' for _ in d['predicates']]        
         for p, _id in zip(predicts, ids):
             s_id, p_id = _id
-            data[s_id][plemma_ids][p_id] = p
-        return data
+            self.data[s_id]['plemma_ids'][p_id] = p
+        return self.data
 
     def __getitem__(self, i):
         return {'input_ids': self.batch_input_ids[i].long(), 'token_type_ids': self.batch_token_type_ids[i].long(),
                 'attention_mask': self.batch_attention_mask[i].float(), 'target': self.batch_target[i].float()}
-
 
 def disam_predict(dataset, model, device, amp):
     model.eval()
@@ -193,31 +170,39 @@ def disam_predict(dataset, model, device, amp):
             predict_probs.append(predict_prob)
     targets1 = torch.cat(targets)
     predict_probs1 = torch.cat(predict_probs)
-    sents = list(set([(i[0], i[1]) for i in ids]))
-    sents_dict = {k: v for v, k in enumerate(sents)}
-    label = list(frames.keys())
-    lemma_id_dict = {k: v for v, k in enumerate(label)}
-    targets2 = torch.zeros([len(sents), len(frames)], dtype=torch.uint8)
-    predict_probs2 = torch.zeros([len(sents), len(frames)], dtype=torch.float)
-    for t, p, _id in zip(targets1, predict_probs1, ids):
-        s_id, p_id, lemma, fid = _id
-        id0 = sents_dict[(s_id, p_id)]
-        id1 = lemma_id_dict[f'{lemma}.{fid}']
-        targets2[id0, id1] = t
-        predict_probs2[id0, id1] = p
-    predicts = torch.zeros([len(sents), len(frames)],
-                           dtype=torch.uint8)  # argmax预测
-    argmax_idx = torch.argmax(predict_probs2, dim=-1)
-    for i in range(len(predicts)):
-        predicts[i][argmax_idx[i]] = 1
-    p = (targets2.max(dim=-1)[1] == predicts.max(dim=-1)
-         [1]).sum().item()/len(targets2)
-    print("score: %.4f" % p)
+    sp_ids = list(set([(i[0], i[1]) for i in ids]))
+    sp_dict = {k: v for v, k in enumerate(sp_ids)}
+    metas = {k:[] for k in sp_ids}
+    lemma_eval = [[] for _ in sp_ids]
+    fid_eval = [[] for _ in sp_ids]
+    for t,p,_id in zip(targets1,predict_probs1,ids):
+        s_id, p_id, glemma, plemma, fid = _id
+        lemma_eval[sp_dict[(s_id,p_id)]].append(1 if glemma==plemma else 0)
+        metas[(s_id,p_id)].append((glemma, plemma, fid))        
+        s_id, p_id, glemma, plemma, fid = _id
+        fid_eval[sp_dict[(s_id,p_id)]].append((t,p))
+    lemma_eval1 = []
+    for le in lemma_eval:
+        lemma_eval1.append(max(le))        
+    fid_eval1 = []
+    for fe in fid_eval:
+        gold_idx = np.argmax([i[0] for i in fe])
+        pre_idx = np.argmax([i[1] for i in fe])
+        if gold_idx==pre_idx:
+            fid_eval1.append(1)
+        else:
+            fid_eval1.append(0)
+    print("lemma recognition accuracy: %.4f"%((sum(lemma_eval1))/len(lemma_eval1)))
+    print("sense recognition accuracy: %.4f"%((sum(fid_eval1))/len(fid_eval1)))
+    print("predicate disambiguation accuracy: %.4f"%((sum([i*j for i,j in zip(lemma_eval1,fid_eval1)]))/len(fid_eval1)))
     predicts1 = []
-    for idx in argmax_idx:
-        p = label[idx]
-        predicts1.append(p)
-    return predicts1, sents
+    for i,fe in enumerate(fid_eval):
+        k=sp_ids[i]
+        meta = metas[k]
+        pre_idx = np.argmax([i[1] for i in fe])
+        glemma, plemma, fid = meta[pre_idx]
+        predicts1.append(f'{plemma}.{fid}')
+    return predicts1, sp_ids
 
 
 if __name__ == '__main__':
@@ -227,7 +212,6 @@ if __name__ == '__main__':
     parser.add_argument('--output_path')
     parser.add_argument('--checkpoint_path')
     parser.add_argument('--save', action='store_true')
-    parser.add_argument('--lemma_level', type=int, choices=[1, 2])
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--max_tokens', type=int, default=1024)
     args = parser.parse_args()
@@ -244,21 +228,11 @@ if __name__ == '__main__':
         "cuda") if torch.cuda.is_available() else torch.device("cpu")
     config, model = load_checkpoint(args.checkpoint_path)
     model.to(device)
-    tokenizer = AutoTokenizer.from_pretrained(
-        config.pretrained_model_name_or_path)
-    #gold lemma
-    dataset0 = DisamDataset(args.dataset_path, tokenizer,args.max_tokens, 0)
-    print('gold lemma ',end="")
-    predicts0, ids0 = disam_predict(dataset0, model, device, args.amp)
-    #predict lemma
-    dataset1 = DisamDataset(args.dataset_path, tokenizer,args.max_tokens, args.lemma_level)
-    print('predict lemma ',end="")
-    predicts1, ids1 = disam_predict(dataset1, model, device, args.amp)
+    tokenizer = AutoTokenizer.from_pretrained(config.pretrained_model_name_or_path)
+    tokenizer.add_special_tokens({'additional_special_tokens': ['<p>', '</p>']})
+    dataset = DisamDataset(args.dataset_path, tokenizer,args.max_tokens)
+    predicts, ids = disam_predict(dataset, model, device, args.amp)
     if args.save:
-        data0 = dataset0.predict2json(predicts0, ids0)
-        data1 = dataset1.predict2json(predicts1, ids1)
-        for d0,d1 in zip(data0,data1):
-            assert d0['sentence']==d1['sentence'] and d0['predicates']==d1['predicates']
-            d0['plemma_ids1']=d1['plemma_ids1']
+        data = dataset.predict2json(predicts, ids)
         with open(args.output_path, 'w') as f:
-            json.dump(data0, f, sort_keys=True, indent=4)
+            json.dump(data, f, sort_keys=True, indent=4)

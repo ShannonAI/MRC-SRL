@@ -53,6 +53,7 @@ rm "${SRL_PATH}/conll05st-release.tar.gz"
 rm "${SRL_PATH}/conll05st-tests.tar.gz"
 
 cd "${CONLL05_PATH}"
+#require tcsh
 ./scripts/make-trainset.sh
 ./scripts/make-devset.sh
 

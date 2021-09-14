@@ -11,8 +11,7 @@ class MyModel(nn.Module):
         self.loss_func = nn.CrossEntropyLoss()
         self.bert = AutoModel.from_pretrained(
             config.pretrained_model_name_or_path)
-        if ('albert' in config.pretrained_model_name_or_path) or ('robert' in config.pretrained_model_name_or_path):
-            self.bert.resize_token_embeddings(self.bert.config.vocab_size+2)
+        self.bert.resize_token_embeddings(self.bert.config.vocab_size+2)
         self.hidden_size = self.bert.config.hidden_size
         self.linear = nn.Linear(self.hidden_size, 7) 
 

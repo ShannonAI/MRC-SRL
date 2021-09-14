@@ -1,4 +1,5 @@
 import os
+from pdb import set_trace
 import shutil
 import json
 import torch
@@ -41,7 +42,8 @@ class MyDataset:
         self.init_data(data, tokenizer, max_tokens)
 
     def init_data(self, data, tokenizer, max_tokens):
-        for s_id, d in enumerate(tqdm(data, desc='stage 1')):
+        #get initial features
+        for s_id, d in enumerate(tqdm(data, desc='preprocessing')):
             sentence = d['sentence']
             if 'roberta' in tokenizer.name_or_path:
                 for i in range(1, len(sentence)):
@@ -54,20 +56,20 @@ class MyDataset:
                 pre = predicates[i]
                 lemma = lemmas[i]
                 gold_fid = frameset_ids[i]
-                # some senses in conll2005 are not labeled
+                # some senses in conll2005 are not annotated
                 if gold_fid == 'XX':
                     continue
-                sentence1i = sentence1[:pre]+[['[unused1]']] + \
-                    sentence1[pre:pre+1]+[['[unused2]']]+sentence1[pre+1:]
+                sentence1i = sentence1[:pre]+[['<p>']] + \
+                    sentence1[pre:pre+1]+[['</p>']]+sentence1[pre+1:]
                 sentence2i = sum(sentence1i, [])
                 if lemma not in lemma_dict:
-                    print('invalid lemma:', lemma)
+                    #print('OOV lemma:', lemma)
                     continue
                 for fid in lemma_dict[lemma]:
                     q = lemma_dict[lemma][fid]
                     q = tokenizer.tokenize(q)
                     if 'roberta' in tokenizer.name_or_path:
-                        txt = ['<s>']+q+['/s']+['<s>']+sentence2i+['/s']
+                        txt = ['<s>']+q+['</s>']+['</s>']+sentence2i+['</s>']
                     else:
                         txt = ['[CLS]']+q+['[SEP]']+sentence2i+['[SEP]']
                     txt_ids = tokenizer.convert_tokens_to_ids(txt)
@@ -85,22 +87,22 @@ class MyDataset:
                     self.ids.append((s_id, i, lemma, fid))
         self.do_batch(max_tokens)
 
-    def sort_func(self, x):
-        return len(x[0])
-
     def do_batch(self, max_tokens):
         self.batch_input_ids = []
         self.batch_token_type_ids = []
         self.batch_target = []
         self.batch_attention_mask = []
         t = zip(self.input_ids, self.token_type_ids, self.target, self.ids)
+        #sort by length
         self.input_ids, self.token_type_ids, self.target, self.ids = zip(
-            *sorted(t, key=self.sort_func))
+            *sorted(t, key=lambda x:len(x[0])))
         length = [len(i) for i in self.input_ids]
         length = np.array(length)
+        #process input that exceeds max tokens 
         length[length > max_tokens] = max_tokens
         indexes = batch_by_tokens(length, max_tokens)
-        for s, e in tqdm(indexes, desc='stage2'):
+        #batch by tokens        
+        for s, e in tqdm(indexes, desc='batching'):
             input_ids = self.input_ids[s:e+1]
             token_type_ids = self.token_type_ids[s:e+1]
             target = self.target[s:e+1]
@@ -117,6 +119,7 @@ class MyDataset:
             self.batch_attention_mask.append(attention_mask)
 
     def save(self, save_dir):
+        #save processed data
         if os.path.exists(save_dir):
             shutil.rmtree(save_dir)
             os.makedirs(save_dir)
@@ -132,6 +135,7 @@ class MyDataset:
         np.save(os.path.join(save_dir, 'ids.npy'), ids)
 
     def load(self, save_dir, max_tokens):
+        #load cached data
         input_ids = np.load(os.path.join(
             save_dir, 'input_ids.npy'), allow_pickle=True)
         token_type_ids = np.load(os.path.join(
@@ -164,9 +168,7 @@ def load_data(path, pretrained_model_name_or_path, max_tokens, shuffle, local_ra
             lemma_dict[lemma] = {}
         lemma_dict[lemma][fid] = v['name']
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
-    if 'albert' or 'roberta' in tokenizer.name_or_path:
-        tokenizer.add_special_tokens(
-            {'additional_special_tokens': ['[unused1]', '[unused2]']})
+    tokenizer.add_special_tokens({'additional_special_tokens': ['<p>', '</p>']})
     dataset = MyDataset(path, tokenizer, max_tokens)
     sampler = DistributedSampler(
         dataset, rank=local_rank) if local_rank != -1 else None

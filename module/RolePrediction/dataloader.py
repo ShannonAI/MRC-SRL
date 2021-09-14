@@ -43,7 +43,7 @@ class MyDataset:
 
     def init_data(self, data, tokenizer, max_tokens):
         #get initial features
-        for d in tqdm(data, desc='stage1'):
+        for d in tqdm(data, desc='preprocessing'):
             sentence = d['sentence']
             if 'roberta' in tokenizer.name_or_path:
                 for i in range(1, len(sentence)):
@@ -54,8 +54,8 @@ class MyDataset:
             for i in range(len(predicates)):
                 pre = predicates[i]
                 args = arguments[i]
-                sentence1i = sentence1[:pre]+[['[unused1]']] + \
-                    sentence1[pre:pre+1]+[['[unused2]']]+sentence1[pre+1:]
+                sentence1i = sentence1[:pre]+[['<p>']] + \
+                    sentence1[pre:pre+1]+[['</p>']]+sentence1[pre+1:]
                 if 'roberta' in tokenizer.name_or_path:
                     sentence2i = ['<s>']+sum(sentence1i, [])+['</s>']
                 else:
@@ -91,7 +91,7 @@ class MyDataset:
         length[length > max_tokens] = max_tokens
         indexes = batch_by_tokens(length, max_tokens)
         #batch by tokens
-        for s, e in tqdm(indexes, desc='stage2'):
+        for s, e in tqdm(indexes, desc='batching'):
             input_ids = self.input_ids[s:e+1]
             target = self.target[s:e+1]
             input_ids1 = pad_sequence(input_ids, batch_first=True)
@@ -104,6 +104,7 @@ class MyDataset:
             self.batch_attention_mask.append(attention_mask)
 
     def save(self, save_dir):
+        #save processed data
         if os.path.exists(save_dir):
             shutil.rmtree(save_dir)
             os.makedirs(save_dir)
@@ -115,6 +116,7 @@ class MyDataset:
         np.save(os.path.join(save_dir, 'target.npy'), target)
 
     def load(self, save_dir, max_tokens):
+        #load cached data
         input_ids = np.load(os.path.join(
             save_dir, 'input_ids.npy'), allow_pickle=True)
         target = np.load(os.path.join(
@@ -139,15 +141,12 @@ def load_data(path, pretrained_model_name_or_path, max_tokens, shuffle, dataset_
         ARGS = ['ARG0', 'ARG1', 'ARG2', 'ARG3', 'ARG4', 'ARG5', 'ARGA']
         ARGMS = ['MNR', 'ADV', 'LOC', 'TMP', 'PRP', 'PRD', 'DIR', 'DIS', 'MOD',
                  'NEG', 'CAU', 'EXT', 'LVB', 'REC', 'ADJ', 'GOL', 'DSP', 'PRR', 'COM', 'PRX', 'PNC']
-
     global LABELS
     global LABELS2ID
     LABELS = ARGS+ARGMS
     LABELS2ID = {k: v for v, k in enumerate(LABELS)}
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
-    if 'albert' or 'roberta' in tokenizer.name_or_path:
-        #add special tokens to mark the predicate
-        tokenizer.add_special_tokens({'additional_special_tokens': ['[unused1]', '[unused2]']})
+    tokenizer.add_special_tokens({'additional_special_tokens': ['<p>', '</p>']})
     dataset = MyDataset(path, tokenizer, max_tokens)
     sampler = DistributedSampler(
         dataset, rank=local_rank) if local_rank != -1 else None

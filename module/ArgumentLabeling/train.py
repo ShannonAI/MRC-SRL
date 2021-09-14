@@ -26,17 +26,19 @@ def set_seed(seed):
 
 def args_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--dataset_tag", choices=['conll2005', 'conll2009', 'conll2012'])
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--dataset_tag", choices=['conll2005', 'conll2009', 'conll2012'])
+    #train_path and dev_path can also be cached data directories.
     parser.add_argument("--train_path")
     parser.add_argument("--dev_path")
     parser.add_argument("--pretrained_model_name_or_path")
 
-    parser.add_argument("--max_tokens", type=int, default=4096)
-    parser.add_argument("--arg_query_type", type=int, default=0)
-    parser.add_argument("--argm_query_type", type=int, default=0)
-    parser.add_argument("--gold_level", type=int, choices=[0, 1, 2], default=2)
+    #The specific meanings of arg_query_type, argm_query_type and gold_level are provided in the dataloader
+    parser.add_argument("--arg_query_type", type=int, default=2,choices=[0,1,2])
+    parser.add_argument("--argm_query_type", type=int, default=1,choices=[0,1])
+    parser.add_argument("--gold_level", type=int, choices=[0, 1], default=1)
 
+    parser.add_argument("--max_tokens", type=int, default=4096)
     parser.add_argument("--max_epochs", default=5, type=int)
     parser.add_argument("--warmup_ratio", type=float, default=-1)
     parser.add_argument("--lr", type=float, default=5e-5)
@@ -44,16 +46,15 @@ def args_parser():
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--max_grad_norm", type=float, default=1)
 
-    parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--checkpoint_path", type=str, help="检查点的路径")
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--amp", action="store_true", help="是否开启混合精度")
-    parser.add_argument("--local_rank", type=int, default=-1, help="用于DDP")
-    parser.add_argument("--eval", action="store_true")
-    parser.add_argument("--tensorboard", action='store_true')
-    parser.add_argument("--save", action="store_true")
-    parser.add_argument("--tqdm_mininterval", default=1,
-                        type=float, help="tqdm的最小更新间隔")
+    parser.add_argument("--resume", action="store_true",help="used to continue training from the checkpoint")
+    parser.add_argument("--checkpoint_path", type=str, help="checkpoint path when resum is true")
+
+    parser.add_argument("--amp", action="store_true", help="whether to enable mixed precision")
+    parser.add_argument("--local_rank", type=int, default=-1) #DDP has been implemented but has not been tested.
+    parser.add_argument("--eval", action="store_true",help="Whether to evaluate during training")
+    parser.add_argument("--tensorboard", action='store_true',help="whether to use tensorboard to log training information")
+    parser.add_argument("--save", action="store_true",help="whether to save the trained model")
+    parser.add_argument("--tqdm_mininterval", default=1,type=float, help="tqdm minimum update interval")
     args = parser.parse_args()
     return args
 
@@ -61,12 +62,12 @@ def args_parser():
 def train(args, train_dataloader, dev_dataloader, resume=False, checkpoint=None):
     model = MyModel(args)
     model.train()
+    #prepare training
     if args.amp:
         scaler = GradScaler()
         if resume:
             scaler.load_state_dict(checkpoint["scaler_state_dict"])
-    device = args.local_rank if args.local_rank != - \
-        1 else (torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu'))
+    device = args.local_rank if args.local_rank != -1 else (torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu'))
     if args.local_rank != -1:
         torch.cuda.set_device(args.local_rank)
     if resume:
@@ -106,6 +107,7 @@ def train(args, train_dataloader, dev_dataloader, resume=False, checkpoint=None)
     start_epoch = 0
     if resume:
         start_epoch = checkpoint['epoch']+1
+    #start training  
     for epoch in range(start_epoch, args.max_epochs):
         if args.local_rank != -1:
             train_dataloader.sampler.set_epoch(epoch)
@@ -123,8 +125,7 @@ def train(args, train_dataloader, dev_dataloader, resume=False, checkpoint=None)
                     loss = model(input_ids, token_type_ids,
                                  attention_mask, target)
                 scaler.scale(loss).backward()
-                if args.max_grad_norm > 0:
-                    scaler.unscale_(optimizer)
+                scaler.unscale_(optimizer)
                 grad_norm = torch.norm(torch.stack(
                     [torch.norm(p.grad) for p in model.parameters() if p.grad is not None]))
                 clip_grad_norm_(model.parameters(), args.max_grad_norm)
@@ -135,8 +136,7 @@ def train(args, train_dataloader, dev_dataloader, resume=False, checkpoint=None)
                 loss.backward()
                 grad_norm = torch.norm(torch.stack(
                     [torch.norm(p.grad) for p in model.parameters() if p.grad is not None]))
-                if args.max_grad_norm > 0:
-                    clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                clip_grad_norm_(model.parameters(), args.max_grad_norm)
                 optimizer.step()
             lr = optimizer.param_groups[0]['lr']
             if args.warmup_ratio > 0:
@@ -175,8 +175,14 @@ def train(args, train_dataloader, dev_dataloader, resume=False, checkpoint=None)
             torch.save(checkpoint, save_path)
             print("model saved at:", save_path)
         if args.eval and args.local_rank < 1:
-            evaluation(model, dev_dataloader, args.amp, device, args.dataset_tag)
-            model.train()
+            score = evaluation(model, dev_dataloader, args.amp, device, args.dataset_tag)
+            if args.tensorboard:
+                hp = vars(args)
+                hp['epoch']=epoch
+                hp['mid']=mid
+                writer.add_hparams(hp,score)
+                writer.flush()
+            model.train()     
     if args.local_rank < 1 and args.tensorboard:
         writer.close()
 
@@ -208,7 +214,7 @@ if __name__ == "__main__":
         if os.path.exists(save_dir):
             shutil.rmtree(save_dir)
         dev_dataloader.dataset.save(save_dir)
-        print('developing data saved at:', save_dir)
+        print('validation data saved at:', save_dir)
     else:
         dev_dataloader = reload_data(args.dev_path, args.max_tokens, False, -1)
     print(args)
