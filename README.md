@@ -1,30 +1,33 @@
 # An MRC Framework for Semantic Role Labeling
 This repo contains code for paper [An MRC Framework for Semantic Role Labeling](.).
 
+## Introduction
+Semantic  Role  Labeling  (SRL)  aims  at  rec-ognizing  the  predicate-argument  structure  ofa  sentence  and  can  be  decomposed  into  twosubtasks:  predicate disambiguation and argument labeling. Prior work deals with these twotasks independently, which ignores the seman-tic connection between the two tasks.  In thispaper, we propose to use the machine readingcomprehension  (MRC)  framework  to  bridgethis gap.  We formalize predicate disambiguation as multiple-choice machine reading comprehension,  where  the  descriptions  of  candidate  senses  of  a  given  predicate  are  used  as options to select the correct sense.  The chosen predicate sense is then used to determine the semantic roles for that predicate, and these semantic roles are used to construct the query for another MRC model for argument labeling. In this way, we are able to leverage both thepredicate semantics and the semantic role semantics  for  argument  labeling.  We  also  pro-pose to select a subset of all the possible se-mantic roles for computational efficiency. Experiments show that the proposed frameworkachieves  state-of-the-art  results  on  both  spanand dependency benchmarks.
+
 ## Results
 Table 1: Results for predicate disambiguation.
-|                        | Dev  | WSJ  | Brown |
-|------------------------|------|------|-------|
-| Shi and Zhang (2017)   | -    | 93.4 | 82.4  |
-| Roth and Lapata (2016) | 94.8 | 95.5 | -     |
-| He et al. (2018b)      | 95.0 | 95.6 | -     |
-| Shi and Lin (2019)     | 96.3 | 96.9 | 90.6  |
-| Ours                   | 96.8 | 97.3 | 91.3  |
+| Model                  |  Dev |  WSJ | Brown |
+|------------------------|:----:|:----:|:-----:|
+| Shi and Zhang (2017)   |   -  | 93.4 |  82.4 |
+| Roth and Lapata (2016) | 94.8 | 95.5 |   -   |
+| He et al. (2018b)      | 95.0 | 95.6 |   -   |
+| Shi and Lin (2019)     | 96.3 | 96.9 |  90.6 |
+| Ours                   | 96.8 | 97.3 |  91.3 |
 
 Table 2: Results for argument labeling.
-|                                    | Encoder | CoNLL05 WSJ | CoNLL05 Brown | CoNLL09 WSJ | CoNLL09 Brown | CoNLL12 Test |
-|------------------------------------|---------|-------------|---------------|-------------|---------------|--------------|
-| Zhou, Li, and Zhao (2020)          | BERT    | 88.9        | 81.4          | 91.2        | 85.9          | -            |
-| Mohammadshahi and Henderson (2021) | BERT    | 88.9        | 83.2          | 91.2        | 86.4          | -            |
-| Xia et al. (2020)                  | RoBERTa | 88.6        | 83.2          | -           | -             | -            |
-| Marcheggiani and Titov (2020)      | RoBERTa | 88.0        | 80.6          | -           | -             | 86.8         |
-| Conia and Navigli (2020)           | BERT    | -           | -             | 92.6        | 85.9          | 87.3         |
-| Jindal et al. (2020)               | BERT    | 87.9        | 80.2          | 90.8        | 85.0          | 86.6         |
-| Paolini et al. (2021)              | T5      | 89.3        | 82.0          | -           | -             | 87.7         |
-| Blloshmi et al. (2021)             | BART    | -           | -             | 92.4        | 85.2          | 87.3         |
-| Shi and Lin (2019)                 | BERT    | 88.8        | 82.0          | 92.4        | 85.7          | 86.5         |
-| Ours                               | BERT    | 89.3        | 84.7          | 93.0        | 87.0          | 87.8         |
-| Ours                               | RoBERTa | 90.0        | 85.1          | 93.3        | 87.2          | 88.3         |
+| Model                              | Encoder | CoNLL05 WSJ | CoNLL05 Brown | CoNLL09 WSJ | CoNLL09 Brown | CoNLL12 Test |
+|------------------------------------|---------|:-----------:|:-------------:|:-----------:|:-------------:|:------------:|
+| Zhou, Li, and Zhao (2020)          | BERT    |     88.9    |      81.4     |     91.2    |      85.9     |       -      |
+| Mohammadshahi and Henderson (2021) | BERT    |     88.9    |      83.2     |     91.2    |      86.4     |       -      |
+| Xia et al. (2020)                  | RoBERTa |     88.6    |      83.2     |      -      |       -       |       -      |
+| Marcheggiani and Titov (2020)      | RoBERTa |     88.0    |      80.6     |      -      |       -       |     86.8     |
+| Conia and Navigli (2020)           | BERT    |      -      |       -       |     92.6    |      85.9     |     87.3     |
+| Jindal et al. (2020)               | BERT    |     87.9    |      80.2     |     90.8    |      85.0     |     86.6     |
+| Paolini et al. (2021)              | T5      |     89.3    |      82.0     |      -      |       -       |     87.7     |
+| Blloshmi et al. (2021)             | BART    |      -      |       -       |     92.4    |      85.2     |     87.3     |
+| Shi and Lin (2019)                 | BERT    |     88.8    |      82.0     |     92.4    |      85.7     |     86.5     |
+| Ours                               | BERT    |     89.3    |      84.7     |     93.0    |      87.0     |     87.8     |
+| Ours                               | RoBERTa |     90.0    |      85.1     |     93.3    |      87.2     |     88.3     |
 
 
 ## Usage
