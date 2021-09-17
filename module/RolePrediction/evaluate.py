@@ -5,7 +5,7 @@ from sklearn.metrics import classification_report
 
 
 def evaluation(model,dataloader,amp=False,device=torch.device('cpu'),dataset_tag=""):
-    if dataset_tag == 'conll2005' or args.dataset_tag == 'conll2009':
+    if dataset_tag == 'conll2005' or dataset_tag == 'conll2009':
         ARGS = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'AA']
         ARGMS = ['DIR', 'LOC', 'MNR', 'TMP', 'EXT', 'REC',
                  'PRD', 'PNC', 'CAU', 'DIS', 'ADV', 'MOD', 'NEG']
