@@ -49,6 +49,6 @@ python ./scripts/filter_conll2012_data.py ${SRL_PATH}/conll12test.english.v5.jso
   ${SRL_PATH}/test.english.mtl.jsonlines
 
 
-python ./scripts/preprocess.py ${SRL_PATH}/train.english.mtl.jsonlines   ${SRL_PATH}/train.english.2012.jsonlines
-python ./scripts/preprocess.py ${SRL_PATH}/dev.english.mtl.jsonlines   ${SRL_PATH}/dev.english.2012.jsonlines
-python ./scripts/preprocess.py ${SRL_PATH}/test.english.mtl.jsonlines   ${SRL_PATH}/test.english.2012.jsonlines
+python ./scripts/preprocess.py ${SRL_PATH}/train.english.mtl.jsonlines   ${SRL_PATH}/train.english.conll12.json
+python ./scripts/preprocess.py ${SRL_PATH}/dev.english.mtl.jsonlines   ${SRL_PATH}/dev.english.conll12.json
+python ./scripts/preprocess.py ${SRL_PATH}/test.english.mtl.jsonlines   ${SRL_PATH}/test.english.conll12.json

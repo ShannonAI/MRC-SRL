@@ -158,6 +158,7 @@ class MyDataset:
                 sentence1i = sentence1[:pre]+[['<p>']] + sentence1[pre:pre+1]+[['</p>']]+sentence1[pre+1:]
                 args = arguments[i]
                 labels = d['plabel'][i]
+                labels = [l if len(l)!=4 else 'A'+l[-1] for l in labels ]
                 self.gold_senses.append((s_id,pre,lemmas[i],frameset_ids[i]))
                 self.senses.append((s_id,pre,d['plemma_ids'][i].split('.')[0],d['plemma_ids'][i].split('.')[1]))
                 if gold_level == 0:

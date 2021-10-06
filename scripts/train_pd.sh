@@ -1,4 +1,4 @@
-python ./module/PredicateDisambiguation/train.py \
+nohup python ./module/PredicateDisambiguation/train.py \
 --dataset_tag conll2005 \
 --pretrained_model_name_or_path roberta-large \
 --train_path ./data/conll2005/train.english.conll05.json  \
@@ -10,4 +10,7 @@ python ./module/PredicateDisambiguation/train.py \
 --warmup_ratio -1 \
 --eval \
 --save \
---amp
+--amp \
+--tqdm_mininterval 500 \
+>log_pd.txt 2>&1 &
+#cat log_pd.txt

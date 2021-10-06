@@ -28,19 +28,21 @@ def dis_lemma(lemma):
         return lemma
 
 
-def lemmatize(sent, predicates):
+def lemmatize(sent, predicates, dis=True):
     '''
     lemmatization using spaCy, you can replace it with other lemmatizers.
     Args:
         sent: word list
         predicates: predicate index list
+        dis: use edit distance
     '''
     sent = [s.lower() for s in sent]
     sent1 = spacy.tokens.doc.Doc(nlp.vocab, sent)
     for name, proc in nlp.pipeline:
         sent1 = proc(sent1)
     plemmas = [sent1[p].lemma_ for p in predicates]
-    plemmas = [dis_lemma(l) for l in plemmas]
+    if dis:
+        plemmas = [dis_lemma(l) for l in plemmas]
     return plemmas
 
 
@@ -72,6 +74,7 @@ class DisamDataset:
             predicates = d['predicates']
             glemmas = d['lemmas']
             plemmas = lemmatize(sentence, predicates)
+            plemmas1 = lemmatize(sentence, predicates,False) #don't use edit distance
             if 'roberta' in tokenizer.name_or_path:
                 for i in range(1, len(sentence)):
                     sentence[i] = ' '+sentence[i]
@@ -81,6 +84,7 @@ class DisamDataset:
                 pre = predicates[i]
                 glemma = glemmas[i]
                 plemma = plemmas[i]
+                plemma1 = plemmas1[i]
                 gold_fid = frameset_ids[i]
                 sentence1i = sentence1[:pre]+[['<p>']] + \
                     sentence1[pre:pre+1]+[['</p>']]+sentence1[pre+1:]
@@ -104,7 +108,7 @@ class DisamDataset:
                     self.token_type_ids.append(token_type_ids)
                     target = [1 if fid == gold_fid else 0]
                     self.target.append(target)
-                    self.ids.append((s_id, i, glemma, plemma, fid)) #meta information about this sample
+                    self.ids.append((s_id, i, glemma, plemma, fid, plemma1)) #meta information about this sample
         self.do_batch(max_tokens)
 
     def do_batch(self, max_tokens):
@@ -149,6 +153,10 @@ class DisamDataset:
                 'attention_mask': self.batch_attention_mask[i].float(), 'target': self.batch_target[i].float()}
 
 def disam_predict(dataset, model, device, amp):
+    '''
+    Note that due to the existence of OOV gold lemma, the evaluation of predicate disambiguation does not use edit distance,
+    but the predicate disambiguation results used for argument labeling use the edit distance to address the OOV problem.
+    '''
     model.eval()
     targets = []
     predict_probs = []
@@ -176,31 +184,35 @@ def disam_predict(dataset, model, device, amp):
     lemma_eval = [[] for _ in sp_ids]
     fid_eval = [[] for _ in sp_ids]
     for t,p,_id in zip(targets1,predict_probs1,ids):
-        s_id, p_id, glemma, plemma, fid = _id
-        lemma_eval[sp_dict[(s_id,p_id)]].append(1 if glemma==plemma else 0)
-        metas[(s_id,p_id)].append((glemma, plemma, fid))        
-        s_id, p_id, glemma, plemma, fid = _id
+        s_id, p_id, glemma, plemma, fid, plemma1 = _id
+        lemma_eval[sp_dict[(s_id,p_id)]].append([1 if glemma==plemma else 0,1 if glemma==plemma1 else 0])
+        metas[(s_id,p_id)].append((glemma, plemma, fid, plemma1))        
         fid_eval[sp_dict[(s_id,p_id)]].append((t,p))
     lemma_eval1 = []
     for le in lemma_eval:
-        lemma_eval1.append(max(le))        
+        w_dis = max([i[0] for i in le])
+        wo_dis = max([i[1] for i in le])
+        lemma_eval1.append((w_dis,wo_dis)) 
     fid_eval1 = []
-    for fe in fid_eval:
-        gold_idx = np.argmax([i[0] for i in fe])
-        pre_idx = np.argmax([i[1] for i in fe])
-        if gold_idx==pre_idx:
-            fid_eval1.append(1)
-        else:
-            fid_eval1.append(0)
-    print("lemma recognition accuracy: %.4f"%((sum(lemma_eval1))/len(lemma_eval1)))
-    print("sense recognition accuracy: %.4f"%((sum(fid_eval1))/len(fid_eval1)))
-    print("predicate disambiguation accuracy: %.4f"%((sum([i*j for i,j in zip(lemma_eval1,fid_eval1)]))/len(fid_eval1)))
+    for i,fe in enumerate(fid_eval):
+        gold_idx = np.argmax([f[0] for f in fe])
+        pre_idx = np.argmax([f[1] for f in fe])
+        # 01 is the default sense number for OOV lemma
+        pre_wo_dis = '01'==metas[sp_ids[i]][gold_idx][2] if metas[sp_ids[i]][0][-1] not in lemma_dict else gold_idx==pre_idx
+        fid_eval1.append((gold_idx==pre_idx,pre_wo_dis))        
+    #print("lemma recognition accuracy: %.4f"%((sum([i[0] for i in lemma_eval1]))/len(lemma_eval1)))
+    #print("lemma recognition accuracy1: %.4f"%((sum([i[1] for i in lemma_eval1]))/len(lemma_eval1)))
+    #print("sense recognition accuracy: %.4f"%((sum([i[0] for i in fid_eval1]))/len(fid_eval1)))
+    #print("sense recognition accuracy1: %.4f"%((sum([i[1] for i in fid_eval1]))/len(fid_eval1)))    
+    #print("with edit distance accuracy: %.4f"%((sum([i[0]*j[0] for i,j in zip(lemma_eval1,fid_eval1)]))/len(fid_eval1)))
+    #print("without edit distance accuracy: %.4f"%((sum([i[1]*j[1] for i,j in zip(lemma_eval1,fid_eval1)]))/len(fid_eval1)))
+    print("accuracy: %.4f"%((sum([i[1]*j[1] for i,j in zip(lemma_eval1,fid_eval1)]))/len(fid_eval1)))    
     predicts1 = []
     for i,fe in enumerate(fid_eval):
         k=sp_ids[i]
         meta = metas[k]
         pre_idx = np.argmax([i[1] for i in fe])
-        glemma, plemma, fid = meta[pre_idx]
+        glemma, plemma, fid, plemma1 = meta[pre_idx]
         predicts1.append(f'{plemma}.{fid}')
     return predicts1, sp_ids
 

@@ -33,6 +33,7 @@ def evaluation(model, dataloader, amp=False, device=torch.device('cuda'),dataset
     context_masks = []
     sep_predicts = []
     if dataset_tag=='conll2009':
+        #ignore the lemma, only compare the frame part
         gold_senses = [(i[0],i[1],i[-1]) for i in dataloader.dataset.gold_senses]
         predict_senses = [(i[0],i[1],i[-1]) for i in dataloader.dataset.senses]   
     else:

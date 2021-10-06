@@ -168,7 +168,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_path')
     parser.add_argument('--checkpoint_path')
     parser.add_argument('--save', action='store_true')
-    parser.add_argument('--alpha', type=float, default=-1,help="ratio of the number of roles to the number of predicates")
+    parser.add_argument('--alpha', type=float, default=-1,help="ratio of the number of roles to the number of predicates (lambda in the paper)")
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--max_tokens', type=int, default=1024)
     args = parser.parse_args()

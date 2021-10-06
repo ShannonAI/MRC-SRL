@@ -7,6 +7,7 @@ python ./module/RolePrediction/predict.py \
 --amp
 
 # detailed evaluation , used to determine the value of alpha (lambda in the paper)
+# the values of alpha in CoNLL05, CoNLL09 and CoNLL12 are 5, 4.2 and 5.5 respectively.
 python ./module/RolePrediction/predict.py \
 --dataset_tag conll2005 \
 --dataset_path ./data/conll2005/dev.english.conll05.json \

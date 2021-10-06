@@ -1,4 +1,4 @@
-python ./module/ArgumentLabeling/train.py \
+nohup python ./module/ArgumentLabeling/train.py \
 --dataset_tag conll2005 \
 --pretrained_model_name_or_path roberta-large \
 --train_path ./data/conll2005/train.english.psense.plabel.conll05.json \
@@ -14,5 +14,7 @@ python ./module/ArgumentLabeling/train.py \
 --tensorboard \
 --eval \
 --save \
---amp
-
+--amp \
+--tqdm_mininterval 500 \
+>log_al.txt 2>&1 &
+#cat log_al.txt
